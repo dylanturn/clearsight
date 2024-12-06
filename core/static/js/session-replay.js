@@ -239,19 +239,53 @@ class SessionReplay {
                     try {
                         if (addition.html) {
                             const temp = doc.createElement('div');
-                            temp.innerHTML = addition.html;
+                            temp.innerHTML = this.sanitizeHTML(addition.html);
                             const newNode = temp.firstChild;
                             
                             if (!newNode) {
                                 throw new Error('Invalid HTML content');
                             }
+
+                            // Handle external resources
+                            const tagName = newNode.tagName ? newNode.tagName.toUpperCase() : '';
+                            if (tagName === 'LINK' && newNode.getAttribute('rel') === 'stylesheet') {
+                                // Handle external stylesheets
+                                const href = newNode.getAttribute('href');
+                                if (href) {
+                                    console.log('Processing external stylesheet:', href);
+                                    // Add the stylesheet to the frame's head
+                                    const link = doc.createElement('link');
+                                    link.rel = 'stylesheet';
+                                    link.href = href;
+                                    doc.head.appendChild(link);
+                                }
+                                return;
+                            } else if (tagName === 'SCRIPT') {
+                                // Handle external scripts
+                                const src = newNode.getAttribute('src');
+                                if (src) {
+                                    console.log('Processing external script:', src);
+                                    // Add the script to the frame's head
+                                    const script = doc.createElement('script');
+                                    script.src = src;
+                                    script.async = true;
+                                    doc.head.appendChild(script);
+                                }
+                                return;
+                            }
                             
-                            // Highlight new content briefly
-                            newNode.style.animation = 'highlight-new 1s ease-out';
+                            // Add other nodes to body
                             doc.body.appendChild(newNode);
-                            appliedChanges++;
                             
-                            showFeedback(`Added: ${newNode.tagName.toLowerCase()}`, 'success');
+                            // Add highlight animation class
+                            if (newNode.style) {
+                                newNode.classList.add('highlight-new');
+                                setTimeout(() => newNode.classList.remove('highlight-new'), 1000);
+                            }
+                            
+                            appliedChanges++;
+                            const elementType = tagName.toLowerCase() || 'element';
+                            showFeedback(`Added: ${elementType}`, 'success');
                         }
                     } catch (error) {
                         console.error('Error adding element:', error);
@@ -403,21 +437,40 @@ class SessionReplay {
     }
     
     findElementByPath(doc, path) {
-        const parts = path.split(' > ');
-        let element = doc;
-        
-        for (const part of parts) {
-            const [tag, ...classes] = part.split('.');
-            const candidates = element.getElementsByTagName(tag);
-            
-            element = Array.from(candidates).find(el => 
-                classes.every(cls => el.classList.contains(cls))
-            );
-            
-            if (!element) return null;
+        if (!doc || !path || typeof path !== 'string') {
+            console.warn('Invalid arguments to findElementByPath:', { doc: !!doc, path });
+            return null;
         }
-        
-        return element;
+
+        try {
+            // Handle direct selectors (e.g., "div.class-name")
+            const directElement = doc.querySelector(path);
+            if (directElement) {
+                return directElement;
+            }
+
+            // Fall back to path-based lookup
+            const parts = path.split(' > ');
+            let element = doc;
+            
+            for (const part of parts) {
+                const [tag, ...classes] = part.split('.');
+                if (!tag) continue;
+                
+                const candidates = element.getElementsByTagName(tag);
+                
+                element = Array.from(candidates).find(el => 
+                    classes.every(cls => el.classList && el.classList.contains(cls))
+                );
+                
+                if (!element) return null;
+            }
+            
+            return element;
+        } catch (error) {
+            console.error('Error in findElementByPath:', error);
+            return null;
+        }
     }
     
     createSelector(element) {
@@ -560,6 +613,22 @@ class SessionReplay {
                 // Create a parser to properly parse the HTML
                 const parser = new DOMParser();
                 const parsedDoc = parser.parseFromString(sessionData.page_html, 'text/html');
+                
+                // Add CSP meta tag to the iframe content
+                const cspMeta = doc.createElement('meta');
+                cspMeta.httpEquiv = 'Content-Security-Policy';
+                cspMeta.content = "default-src 'self'; " +
+                    "script-src 'self' 'unsafe-inline' 'unsafe-eval' " +
+                    "https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://cdn.tailwindcss.com; " +
+                    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com " +
+                    "https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://cdn.tailwindcss.com; " +
+                    "img-src 'self' data: blob: https:; " +
+                    "font-src 'self' data: https://fonts.gstatic.com; " +
+                    "connect-src 'self' https:; " +
+                    "frame-src 'self'; " +
+                    "object-src 'none'; " +
+                    "base-uri 'self'";
+                parsedDoc.head.insertBefore(cspMeta, parsedDoc.head.firstChild);
                 
                 // Copy the parsed content to the iframe
                 doc.write('<!DOCTYPE html>');

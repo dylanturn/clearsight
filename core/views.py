@@ -45,6 +45,7 @@ def sessions_list(request):
     }
     return render(request, 'core/sessions_list.html', context)
 
+@require_http_methods(['GET'])
 def session_replay(request, session_id):
     try:
         session = get_object_or_404(Session, id=session_id)
@@ -139,10 +140,29 @@ def session_replay(request, session_id):
         
         context = {
             'session': session,
-            'session_data': session_json
+            'session_data': session_json,
+            'disable_telemetry': True  # Disable telemetry on replay page
         }
         
-        return render(request, 'core/session_replay.html', context)
+        response = render(request, 'core/session_replay.html', context)
+        
+        # Add CSP header to allow external resources
+        csp = (
+            "default-src 'self'; "
+            "script-src 'self' 'unsafe-inline' 'unsafe-eval' "
+            "https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://cdn.tailwindcss.com; "
+            "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com "
+            "https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://cdn.tailwindcss.com; "
+            "img-src 'self' data: blob: https:; "
+            "font-src 'self' data: https://fonts.gstatic.com; "
+            "connect-src 'self' https:; "
+            "frame-src 'self'; "
+            "object-src 'none'; "
+            "base-uri 'self'"
+        )
+        response['Content-Security-Policy'] = csp
+        
+        return response
         
     except Exception as e:
         logger.error(f"Error in session_replay view: {e}")

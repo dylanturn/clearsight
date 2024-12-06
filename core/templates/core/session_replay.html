@@ -340,6 +340,51 @@
     .fade-out {
         animation: fade-out 0.5s cubic-bezier(0.4, 0, 0.2, 1);
     }
+    
+    /* Animation for new elements */
+    @keyframes highlight-new-animation {
+        0% { background-color: rgba(0, 255, 0, 0.2); }
+        100% { background-color: transparent; }
+    }
+    
+    .highlight-new {
+        animation: highlight-new-animation 1s ease-out;
+    }
+    
+    /* Animation for removed elements */
+    @keyframes fade-out {
+        0% { opacity: 1; }
+        100% { opacity: 0; }
+    }
+    
+    /* Feedback messages */
+    .diff-message {
+        padding: 8px 12px;
+        margin: 4px 0;
+        border-radius: 4px;
+        font-size: 14px;
+        opacity: 0.9;
+    }
+    
+    .diff-message.success {
+        background-color: rgba(0, 255, 0, 0.2);
+        color: #006400;
+    }
+    
+    .diff-message.error {
+        background-color: rgba(255, 0, 0, 0.2);
+        color: #8b0000;
+    }
+    
+    .diff-message.warning {
+        background-color: rgba(255, 255, 0, 0.2);
+        color: #8b8b00;
+    }
+    
+    .diff-message.info {
+        background-color: rgba(0, 0, 255, 0.2);
+        color: #00008b;
+    }
 </style>
 {% endblock %}
 
@@ -359,7 +404,8 @@
     </div>
     
     <div class="viewport">
-        <iframe id="replay-frame" sandbox="allow-same-origin allow-scripts allow-popups allow-popups-to-escape-sandbox"></iframe>
+        <!-- <iframe id="replay-frame" sandbox="allow-same-origin allow-scripts allow-popups allow-forms allow-downloads allow-modals allow-presentation" allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture"></iframe> -->
+        <iframe id="replay-frame" sandbox="allow-same-origin allow-scripts allow-popups allow-forms allow-downloads allow-modals allow-presentation" allow="*"></iframe>
         <div id="cursor"></div>
     </div>
 </div>

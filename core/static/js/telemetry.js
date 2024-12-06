@@ -4,6 +4,10 @@ class Telemetry {
         this.lastHtml = null;
         this.eventQueue = [];
         this.isInitialized = false;
+        this.lastMouseEvent = null;
+        this.mouseRateLimit = 50; // Rate limit in milliseconds
+        this.lastDomSnapshot = null;
+        this.ws = null;
         this.data = {
             pageUrl: window.location.href,
             pageTitle: document.title,
@@ -20,23 +24,40 @@ class Telemetry {
             startTime: Date.now()
         };
 
-        this.setupSession();
+        this.setupWebSocket();
     }
 
-    getCSRFToken() {
-        const name = 'csrftoken';
-        let cookieValue = null;
-        if (document.cookie && document.cookie !== '') {
-            const cookies = document.cookie.split(';');
-            for (let i = 0; i < cookies.length; i++) {
-                const cookie = cookies[i].trim();
-                if (cookie.substring(0, name.length + 1) === (name + '=')) {
-                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
-                    break;
-                }
+    setupWebSocket() {
+        // Use wss for production, ws for development
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const wsUrl = `${protocol}//${window.location.host}/ws/telemetry/`;
+        
+        this.ws = new WebSocket(wsUrl);
+        
+        this.ws.onopen = () => {
+            console.log('WebSocket connection established');
+            this.setupSession();
+        };
+        
+        this.ws.onclose = () => {
+            console.log('WebSocket connection closed');
+            // Attempt to reconnect after 5 seconds
+            setTimeout(() => this.setupWebSocket(), 5000);
+        };
+        
+        this.ws.onerror = (error) => {
+            console.error('WebSocket error:', error);
+        };
+        
+        this.ws.onmessage = (event) => {
+            const response = JSON.parse(event.data);
+            if (response.type === 'session_started') {
+                this.sessionId = response.session_id;
+                this.isInitialized = true;
+                console.log('Session initialized:', this.sessionId);
+                this.setupEventListeners();
             }
-        }
-        return cookieValue;
+        };
     }
 
     async setupSession() {
@@ -102,31 +123,134 @@ class Telemetry {
                 pageStyles: Object.fromEntries(styleMap)
             };
 
-            // Initialize session
-            const response = await this.sendData('session_start', sessionData);
-            const result = await response.json();
-            
-            if (result.session_id) {
-                this.sessionId = result.session_id;
-                this.isInitialized = true;
-                console.log('Session initialized:', this.sessionId);
-                
-                // Process any queued events
-                while (this.eventQueue.length > 0) {
-                    const { type, data } = this.eventQueue.shift();
-                    await this.sendData(type, data);
-                }
-                
-                // Setup event listeners only after session is initialized
-                this.setupEventListeners();
-            } else {
-                throw new Error('No session ID received from server');
-            }
+            // Send session start data through WebSocket
+            this.sendData('session_start', sessionData);
+            this.lastDomSnapshot = document.documentElement.innerHTML;
         } catch (error) {
             console.error('Error setting up session:', error);
             // Retry setup after a delay
             setTimeout(() => this.setupSession(), 5000);
         }
+    }
+
+    sendData(type, data) {
+        if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+            // If not initialized and not a session_start event, queue the event
+            if (!this.isInitialized && type !== 'session_start') {
+                this.eventQueue.push({ type, data });
+                console.log('Event queued:', type);
+                return;
+            }
+
+            const requestData = {
+                type: type,
+                session_id: this.sessionId,
+                timestamp: Date.now(),
+                data: data
+            };
+
+            this.ws.send(JSON.stringify(requestData));
+        } else {
+            console.warn('WebSocket not ready, queueing event:', type);
+            this.eventQueue.push({ type, data });
+        }
+    }
+
+    setupEventListeners() {
+        // Mouse movement with rate limiting
+        document.addEventListener('mousemove', (e) => {
+            const now = Date.now();
+            if (!this.lastMouseEvent || (now - this.lastMouseEvent) >= this.mouseRateLimit) {
+                this.lastMouseEvent = now;
+                this.sendData('mousemove', {
+                    clientX: e.clientX,
+                    clientY: e.clientY,
+                    pageX: e.pageX,
+                    pageY: e.pageY,
+                    timestamp: now
+                });
+            }
+        });
+
+        // Clicks
+        document.addEventListener('click', (e) => {
+            const target = e.target;
+            this.sendData('click', {
+                clientX: e.clientX,
+                clientY: e.clientY,
+                target: this.getElementPath(target),
+                timestamp: Date.now()
+            });
+        });
+
+        // Input changes
+        document.addEventListener('input', (e) => {
+            const target = e.target;
+            if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') {
+                this.sendData('input', {
+                    target: this.getElementPath(target),
+                    value: target.value,
+                    type: target.type || 'text',
+                    timestamp: Date.now()
+                });
+            }
+        });
+
+        // Form submissions
+        document.addEventListener('submit', (e) => {
+            const form = e.target;
+            this.sendData('form_submit', {
+                form: this.getElementPath(form),
+                timestamp: Date.now()
+            });
+        });
+
+        // Scroll events with rate limiting
+        let scrollTimeout;
+        document.addEventListener('scroll', (e) => {
+            if (scrollTimeout) {
+                clearTimeout(scrollTimeout);
+            }
+            scrollTimeout = setTimeout(() => {
+                this.sendData('scroll', {
+                    scrollX: window.scrollX,
+                    scrollY: window.scrollY,
+                    timestamp: Date.now()
+                });
+            }, 100); // Rate limit scroll events to 100ms
+        });
+
+        // DOM mutations
+        const observer = new MutationObserver((mutations) => {
+            const currentSnapshot = document.documentElement.innerHTML;
+            if (currentSnapshot !== this.lastDomSnapshot) {
+                this.lastDomSnapshot = currentSnapshot;
+                this.sendData('dom_change', {
+                    mutations: mutations.map(mutation => ({
+                        type: mutation.type,
+                        target: this.getElementPath(mutation.target),
+                        addedNodes: Array.from(mutation.addedNodes).map(node => 
+                            node.nodeType === Node.ELEMENT_NODE ? this.getElementPath(node) : null
+                        ).filter(Boolean),
+                        removedNodes: Array.from(mutation.removedNodes).map(node => 
+                            node.nodeType === Node.ELEMENT_NODE ? this.getElementPath(node) : null
+                        ).filter(Boolean),
+                        timestamp: Date.now()
+                    }))
+                });
+            }
+        });
+
+        observer.observe(document.body, {
+            childList: true,
+            subtree: true,
+            attributes: true,
+            characterData: true
+        });
+
+        // Network requests
+        this.setupXHRInterceptor();
+        this.setupFetchInterceptor();
     }
 
     getElementPath(element) {
@@ -150,418 +274,80 @@ class Telemetry {
         return path.join(' > ');
     }
 
-    captureHtmlDiff() {
-        const currentHtml = document.documentElement.outerHTML;
-        if (this.lastHtml === currentHtml) {
-            return null;
-        }
-
-        // Create temporary elements to normalize HTML
-        const oldDiv = document.createElement('div');
-        const newDiv = document.createElement('div');
-        oldDiv.innerHTML = this.lastHtml || '';
-        newDiv.innerHTML = currentHtml;
-
-        // Clean up elements (remove scripts, comments, etc)
-        this.cleanupElement(oldDiv);
-        this.cleanupElement(newDiv);
-
-        // Compare and generate diff
-        const diff = {
-            added: [],
-            removed: [],
-            modified: []
-        };
-
-        this.compareElements(oldDiv, newDiv, diff);
-
-        // Update last HTML state
-        this.lastHtml = currentHtml;
-
-        // Only return diff if there are changes
-        if (diff.added.length || diff.removed.length || diff.modified.length) {
-            return JSON.stringify(diff);
-        }
-        return null;
-    }
-
-    cleanupElement(element) {
-        // Remove scripts
-        const scripts = element.getElementsByTagName('script');
-        for (let i = scripts.length - 1; i >= 0; i--) {
-            scripts[i].remove();
-        }
-
-        // Remove comments
-        const iterator = document.createNodeIterator(
-            element,
-            NodeFilter.SHOW_COMMENT,
-            null,
-            false
-        );
-        let node;
-        while (node = iterator.nextNode()) {
-            node.remove();
-        }
-
-        // Remove dynamic attributes
-        const allElements = element.getElementsByTagName('*');
-        for (const el of allElements) {
-            // Remove event handlers
-            const attrs = el.attributes;
-            for (let i = attrs.length - 1; i >= 0; i--) {
-                const attr = attrs[i];
-                if (attr.name.startsWith('on') || attr.name === 'data-reactid') {
-                    el.removeAttribute(attr.name);
-                }
-            }
-        }
-    }
-
-    compareElements(oldEl, newEl, diff) {
-        const oldNodes = Array.from(oldEl.childNodes);
-        const newNodes = Array.from(newEl.childNodes);
-
-        // Compare text content directly for text nodes
-        if (oldEl.nodeType === Node.TEXT_NODE && newEl.nodeType === Node.TEXT_NODE) {
-            if (oldEl.textContent.trim() !== newEl.textContent.trim()) {
-                diff.modified.push({
-                    oldText: oldEl.textContent.trim(),
-                    newText: newEl.textContent.trim()
-                });
-            }
-            return;
-        }
-
-        // Compare attributes
-        if (oldEl.nodeType === Node.ELEMENT_NODE && newEl.nodeType === Node.ELEMENT_NODE) {
-            const oldAttrs = Array.from(oldEl.attributes || []);
-            const newAttrs = Array.from(newEl.attributes || []);
-
-            // Check for modified attributes
-            for (const oldAttr of oldAttrs) {
-                const newAttr = newEl.getAttribute(oldAttr.name);
-                if (newAttr !== oldAttr.value) {
-                    diff.modified.push({
-                        element: oldEl.tagName.toLowerCase(),
-                        attribute: oldAttr.name,
-                        oldValue: oldAttr.value,
-                        newValue: newAttr
-                    });
-                }
-            }
-
-            // Check for added attributes
-            for (const newAttr of newAttrs) {
-                if (!oldEl.hasAttribute(newAttr.name)) {
-                    diff.added.push({
-                        element: newEl.tagName.toLowerCase(),
-                        attribute: newAttr.name,
-                        value: newAttr.value
-                    });
-                }
-            }
-        }
-
-        // Compare child nodes recursively
-        const maxLength = Math.max(oldNodes.length, newNodes.length);
-        for (let i = 0; i < maxLength; i++) {
-            const oldNode = oldNodes[i];
-            const newNode = newNodes[i];
-
-            if (!oldNode && newNode) {
-                // Node was added
-                diff.added.push({
-                    html: newNode.outerHTML || newNode.textContent
-                });
-            } else if (oldNode && !newNode) {
-                // Node was removed
-                diff.removed.push({
-                    html: oldNode.outerHTML || oldNode.textContent
-                });
-            } else if (oldNode && newNode) {
-                // Compare existing nodes
-                this.compareElements(oldNode, newNode, diff);
-            }
-        }
-    }
-
-    async sendData(type, data) {
-        try {
-            // If not initialized and not a session_start event, queue the event
-            if (!this.isInitialized && type !== 'session_start') {
-                this.eventQueue.push({ type, data });
-                console.log('Event queued:', type);
-                return;
-            }
-
-            // Add HTML diff for relevant events
-            if (['input', 'change'].includes(type)) {
-                const htmlDiff = this.captureHtmlDiff();
-                if (htmlDiff) {
-                    data.htmlDiff = htmlDiff;
-                }
-            }
-
-            // Ensure data is an object
-            const eventData = typeof data === 'object' ? { ...data } : { value: data };
-
-            // Add additional context based on event type
-            switch (type) {
-                case 'mousemove':
-                    eventData.x = data.clientX;
-                    eventData.y = data.clientY;
-                    eventData.pageX = data.pageX;
-                    eventData.pageY = data.pageY;
-                    break;
-                case 'click':
-                    eventData.x = data.clientX;
-                    eventData.y = data.clientY;
-                    eventData.target = this.getElementPath(data.target);
-                    break;
-                case 'scroll':
-                    eventData.scrollX = window.scrollX;
-                    eventData.scrollY = window.scrollY;
-                    break;
-                case 'input':
-                case 'change':
-                    eventData.target = this.getElementPath(data.target);
-                    eventData.value = data.target.value;
-                    break;
-                case 'fetch':
-                case 'xhr':
-                    eventData.url = data.url;
-                    eventData.method = data.method;
-                    eventData.status = data.status;
-                    break;
-            }
-
-            const requestData = {
-                type: type,
-                session_id: this.sessionId,
-                timestamp: Date.now(),
-                data: eventData,
-                html_diff: data.htmlDiff || null
-            };
-
-            const response = await fetch('/api/telemetry/', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRFToken': this.getCSRFToken()
-                },
-                body: JSON.stringify(requestData)
-            });
-
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-
-            return response;
-        } catch (error) {
-            console.error('Error sending telemetry data:', error);
-            throw error;
-        }
-    }
-
-    setupEventListeners() {
-        // Mouse movement
-        document.addEventListener('mousemove', this.throttle((e) => {
-            this.sendData('mousemove', {
-                clientX: e.clientX,
-                clientY: e.clientY,
-                pageX: e.pageX,
-                pageY: e.pageY,
-                timestamp: Date.now()
-            });
-        }, 50));
-
-        // Clicks
-        document.addEventListener('click', (e) => {
-            const target = e.target;
-            this.sendData('click', {
-                clientX: e.clientX,
-                clientY: e.clientY,
-                target: target,
-                timestamp: Date.now()
-            });
-        });
-
-        // Input changes
-        document.addEventListener('input', (e) => {
-            const target = e.target;
-            if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') {
-                this.sendData('input', {
-                    target: target,
-                    value: target.value,
-                    type: target.type || 'text',
-                    timestamp: Date.now()
-                });
-            }
-        });
-
-        // Form submissions
-        document.addEventListener('submit', (e) => {
-            const form = e.target;
-            const formData = new FormData(form);
-            const data = {};
-            for (let [key, value] of formData.entries()) {
-                data[key] = value;
-            }
-            
-            this.sendData('form_submit', {
-                form: form,
-                data: data,
-                timestamp: Date.now()
-            });
-        });
-
-        // Scroll events
-        document.addEventListener('scroll', this.throttle((e) => {
-            const target = e.target === document ? document.documentElement : e.target;
-            this.sendData('scroll', {
-                target: target,
-                scrollX: window.scrollX,
-                scrollY: window.scrollY,
-                timestamp: Date.now()
-            });
-        }, 100));
-
-        // DOM mutations
-        const observer = new MutationObserver(this.throttle((mutations) => {
-            const changes = mutations.map(mutation => ({
-                type: mutation.type,
-                target: this.getElementPath(mutation.target),
-                addedNodes: Array.from(mutation.addedNodes).map(node => 
-                    node.outerHTML || node.textContent
-                ),
-                removedNodes: Array.from(mutation.removedNodes).map(node => 
-                    node.outerHTML || node.textContent
-                ),
-                attributeName: mutation.attributeName,
-                oldValue: mutation.oldValue
-            }));
-
-            this.sendData('dom_mutation', {
-                changes: changes,
-                timestamp: Date.now()
-            });
-        }, 100));
-
-        observer.observe(document.body, {
-            childList: true,
-            attributes: true,
-            characterData: true,
-            subtree: true,
-            attributeOldValue: true,
-            characterDataOldValue: true
-        });
-
-        // Page visibility changes
-        document.addEventListener('visibilitychange', () => {
-            this.sendData('visibility_change', {
-                visible: !document.hidden,
-                timestamp: Date.now()
-            });
-        });
-
-        // Window resize
-        window.addEventListener('resize', this.throttle(() => {
-            this.sendData('window_resize', {
-                width: window.innerWidth,
-                height: window.innerHeight,
-                timestamp: Date.now()
-            });
-        }, 100));
-
-        // Error tracking
-        window.addEventListener('error', (e) => {
-            this.sendData('error', {
-                message: e.message,
-                filename: e.filename,
-                lineno: e.lineno,
-                colno: e.colno,
-                timestamp: Date.now()
-            });
-        });
-
-        // Network requests
-        this.setupXHRInterceptor();
-        this.setupFetchInterceptor();
-    }
-
-    throttle(func, wait) {
-        let timeout;
-        return function() {
-            const context = this;
-            const args = arguments;
-            if (!timeout) {
-                timeout = setTimeout(() => {
-                    timeout = null;
-                    func.apply(context, args);
-                }, wait);
-            }
-        }
-    }
-
-    setupXHRInterceptor() {
-        const originalOpen = XMLHttpRequest.prototype.open;
-        const self = this;
-        XMLHttpRequest.prototype.open = function(method, url, async, user, password) {
-            this.addEventListener('readystatechange', function() {
-                if (this.readyState === 4) {
-                    self.sendData('xhr', {
-                        method: method,
-                        url: url,
-                        status: this.status,
-                        statusText: this.statusText,
-                        timestamp: Date.now()
-                    });
-                }
-            });
-            originalOpen.apply(this, arguments);
-        };
-    }
-
     setupFetchInterceptor() {
         const originalFetch = window.fetch;
         const self = this;
-        window.fetch = function(url, options = {}) {
-            const startTime = Date.now();
-            return originalFetch.apply(this, arguments).then(response => {
-                self.sendData('fetch', {
-                    method: options.method || 'GET',
-                    url: typeof url === 'string' ? url : url.url,
-                    status: response.status,
-                    statusText: response.statusText,
-                    duration: Date.now() - startTime,
-                    timestamp: Date.now()
+
+        window.fetch = function() {
+            const url = arguments[0];
+            const options = arguments[1] || {};
+            
+            // Skip all telemetry-related requests to avoid infinite loops
+            const urlString = typeof url === 'string' ? url : url.url;
+            if (urlString.includes('telemetry') || // Matches any URL containing 'telemetry'
+                urlString.includes('/ws/') ||      // Matches WebSocket connections
+                urlString.includes('/api/')) {     // Matches API endpoints
+                return originalFetch.apply(this, arguments);
+            }
+
+            return originalFetch.apply(this, arguments)
+                .then(response => {
+                    self.sendData('fetch', {
+                        url: urlString,
+                        method: options.method || 'GET',
+                        status: response.status,
+                        timestamp: Date.now()
+                    });
+                    return response;
+                })
+                .catch(error => {
+                    self.sendData('fetch_error', {
+                        url: urlString,
+                        method: options.method || 'GET',
+                        error: error.message,
+                        timestamp: Date.now()
+                    });
+                    throw error;
                 });
-                return response;
-            }).catch(error => {
-                self.sendData('fetch', {
-                    method: options.method || 'GET',
-                    url: typeof url === 'string' ? url : url.url,
-                    error: error.message,
-                    duration: Date.now() - startTime,
-                    timestamp: Date.now()
-                });
-                throw error;
-            });
         };
     }
 
-    recordEvent(type, data) {
-        const event = {
-            type,
-            timestamp: Date.now(),
-            data
-        };
+    setupXHRInterceptor() {
+        const originalXHR = window.XMLHttpRequest;
+        const self = this;
 
-        this.data.events.push(event);
-        
-        // Send event
-        this.sendData('event', event);
+        window.XMLHttpRequest = function() {
+            const xhr = new originalXHR();
+            const originalOpen = xhr.open;
+            const originalSend = xhr.send;
+
+            xhr.open = function() {
+                this._url = arguments[1];
+                this._method = arguments[0];
+                return originalOpen.apply(this, arguments);
+            };
+
+            xhr.send = function() {
+                // Skip all telemetry-related requests to avoid infinite loops
+                if (this._url.includes('telemetry') || // Matches any URL containing 'telemetry'
+                    this._url.includes('/ws/') ||      // Matches WebSocket connections
+                    this._url.includes('/api/')) {     // Matches API endpoints
+                    return originalSend.apply(this, arguments);
+                }
+
+                this.addEventListener('load', function() {
+                    self.sendData('xhr', {
+                        url: this._url,
+                        method: this._method,
+                        status: this.status,
+                        timestamp: Date.now()
+                    });
+                });
+                return originalSend.apply(this, arguments);
+            };
+
+            return xhr;
+        };
     }
 }
 
