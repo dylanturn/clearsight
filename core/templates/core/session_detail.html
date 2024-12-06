@@ -4,7 +4,12 @@
 
 {% block content %}
 <div class="bg-white dark:bg-gray-800 shadow rounded-lg p-6">
-    <h2 class="text-2xl font-bold mb-6 dark:text-white">Session Details</h2>
+    <div class="flex justify-between items-center mb-6">
+        <h2 class="text-2xl font-bold dark:text-white">Session Details</h2>
+        <a href="{% url 'session_replay' session.id %}" class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">
+            Watch Replay
+        </a>
+    </div>
     
     <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
         <div>
