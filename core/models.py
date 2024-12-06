@@ -15,6 +15,8 @@ class Session(models.Model):
     window_width = models.IntegerField()
     window_height = models.IntegerField()
     is_active = models.BooleanField(default=True)
+    page_html = models.TextField(null=True, blank=True)  # Store the page HTML
+    page_styles = models.TextField(null=True, blank=True)  # Store computed styles
 
     @property
     def duration(self):

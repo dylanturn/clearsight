@@ -5,30 +5,64 @@
 
 {% block extra_head %}
 <style>
-    #replay-viewport {
+    .viewport {
         position: relative;
-        border: 2px solid #e5e7eb;
+        flex: 1;
+        min-height: 500px;
+        background: #fff;
+        border: 1px solid #ddd;
+        border-radius: 4px;
         overflow: hidden;
-        margin: 0 auto;
     }
+    
+    #replay-frame {
+        width: 100%;
+        height: 100%;
+        border: none;
+        position: absolute;
+        top: 0;
+        left: 0;
+    }
+    
     #cursor {
         position: absolute;
         width: 20px;
         height: 20px;
-        background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 20 20"><path d="M0 0l6 18 2.5-6L14 14l6-14z" fill="%234B5563"/></svg>');
+        background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 20 20"><path d="M0 0l6 18 2.5-6L15 14 0 0z" fill="#000"/></svg>');
         pointer-events: none;
-        z-index: 1000;
-        transform: translate(-50%, -50%);
+        transform-origin: top left;
+        z-index: 9999;
+        transition: transform 0.1s ease;
+        display: none;  /* Initially hidden */
     }
-    .click-indicator {
+    
+    #cursor.clicking {
+        transform: scale(0.9);
+        filter: brightness(0.8);
+    }
+    
+    #cursor.typing {
+        animation: blink 0.1s ease;
+    }
+    
+    @keyframes blink {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.5; }
+    }
+    
+    .click-animation {
         position: absolute;
         width: 20px;
         height: 20px;
         border-radius: 50%;
-        background: rgba(59, 130, 246, 0.5);
-        animation: click-animation 0.5s ease-out forwards;
+        background: rgba(255, 0, 0, 0.5);
+        transform-origin: center;
+        animation: click-ripple 0.5s ease-out;
+        pointer-events: none;
+        z-index: 9998;
     }
-    @keyframes click-animation {
+    
+    @keyframes click-ripple {
         0% {
             transform: scale(0);
             opacity: 1;
@@ -38,76 +72,94 @@
             opacity: 0;
         }
     }
+    
+    .replay-controls {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        margin-bottom: 1rem;
+        padding: 1rem;
+        background: #f8f9fa;
+        border-radius: 0.5rem;
+    }
+    
+    .timeline {
+        flex: 1;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+    
+    #progress {
+        flex: 1;
+        height: 4px;
+        -webkit-appearance: none;
+        appearance: none;
+        background: #dee2e6;
+        border-radius: 2px;
+        outline: none;
+    }
+    
+    #progress::-webkit-slider-thumb {
+        -webkit-appearance: none;
+        appearance: none;
+        width: 12px;
+        height: 12px;
+        background: #0d6efd;
+        border-radius: 50%;
+        cursor: pointer;
+    }
 </style>
 {% endblock %}
 
 {% block content %}
 <div class="container mx-auto px-4 py-8">
-    <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-        <div class="flex justify-between items-center mb-6">
-            <h1 class="text-2xl font-bold dark:text-white">Session Replay</h1>
-            <div class="flex space-x-4">
-                <button id="play-pause" class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">
-                    <span id="play-icon">▶</span>
-                    <span id="pause-icon" class="hidden">⏸</span>
-                </button>
-                <div class="flex items-center space-x-2">
-                    <label class="text-sm dark:text-gray-300">Speed:</label>
-                    <select id="playback-speed" class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded focus:ring-blue-500 focus:border-blue-500 p-2 dark:bg-gray-700 dark:border-gray-600 dark:text-white">
-                        <option value="0.5">0.5x</option>
-                        <option value="1" selected>1x</option>
-                        <option value="2">2x</option>
-                        <option value="4">4x</option>
-                    </select>
-                </div>
+    <h1 class="text-2xl font-bold mb-4">Session Replay</h1>
+    
+    <div class="replay-container bg-white rounded-lg shadow p-4">
+        <div class="replay-controls flex items-center space-x-4 mb-4">
+            <button id="play-pause" class="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600">Play</button>
+            <select id="speed" class="form-select px-4 py-2 border rounded">
+                <option value="0.5">0.5x</option>
+                <option value="1.0" selected>1.0x</option>
+                <option value="2.0">2.0x</option>
+            </select>
+            <div class="timeline flex-1 flex items-center space-x-2">
+                <input type="range" id="progress" class="flex-1" min="0" max="100" value="0">
+                <span id="time-display" class="text-sm">0:00 / 0:00</span>
             </div>
         </div>
-
-        <div class="mb-6">
-            <div class="w-full bg-gray-200 rounded-full h-2.5 dark:bg-gray-700">
-                <div id="progress-bar" class="bg-blue-600 h-2.5 rounded-full" style="width: 0%"></div>
-            </div>
-            <div class="flex justify-between mt-2">
-                <span id="current-time" class="text-sm dark:text-gray-300">00:00</span>
-                <span id="total-time" class="text-sm dark:text-gray-300">00:00</span>
-            </div>
+        
+        <div class="viewport relative border rounded-lg overflow-hidden" style="width: 800px; height: 600px; margin: 0 auto;">
+            <iframe id="replay-frame" class="w-full h-full" sandbox="allow-same-origin allow-scripts"></iframe>
+            <div id="cursor" class="absolute w-4 h-4 bg-red-500 rounded-full pointer-events-none transform -translate-x-1/2 -translate-y-1/2" style="z-index: 1000;"></div>
         </div>
-
-        <div class="flex flex-col space-y-4">
-            <div class="grid grid-cols-2 gap-4 mb-4">
-                <div class="bg-gray-50 dark:bg-gray-700 p-4 rounded">
-                    <h3 class="text-sm font-medium dark:text-white mb-2">Session Info</h3>
-                    <div class="space-y-2 text-sm dark:text-gray-300">
-                        <p>Page: <span id="page-title">{{ session.page_title }}</span></p>
-                        <p>URL: <span id="page-url">{{ session.page_url }}</span></p>
-                        <p>Duration: <span id="session-duration">{{ session.duration }}</span></p>
-                    </div>
-                </div>
-                <div class="bg-gray-50 dark:bg-gray-700 p-4 rounded">
-                    <h3 class="text-sm font-medium dark:text-white mb-2">Event Info</h3>
-                    <div id="current-event" class="space-y-2 text-sm dark:text-gray-300">
-                        <p>Type: <span id="event-type">-</span></p>
-                        <p>Time: <span id="event-time">-</span></p>
-                        <p>Details: <span id="event-details">-</span></p>
-                    </div>
-                </div>
-            </div>
-
-            <div id="replay-viewport-container" class="w-full">
-                <div id="replay-viewport">
-                    <div id="cursor"></div>
-                </div>
-            </div>
+        
+        <div class="debug-info mt-4 text-sm text-gray-600">
+            <p>Session ID: <span id="session-id">{{ session.id }}</span></p>
+            <p>Content Size: <span id="content-size">HTML: {{ session.page_html|length }} bytes, Styles: {{ session.page_styles|length }} bytes</span></p>
+            <p>Events: <span id="event-count">{{ session.events.count }}</span></p>
         </div>
     </div>
 </div>
-{% endblock %}
 
-{% block extra_scripts %}
-<script>
-    // Session data will be injected here
-    const sessionData = {{ session_data|safe }};
-    const events = {{ events_json|safe }};
+<!-- Session Data -->
+<script type="application/json" id="session-data">
+{{ session_data_json|safe }}
 </script>
+
+<!-- Scripts -->
 <script src="{% static 'js/session-replay.js' %}"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    try {
+        const rawData = document.getElementById('session-data').textContent;
+        const sessionData = JSON.parse(rawData.trim());
+        console.log('Initializing replay with session data:', sessionData);
+        window.replay = new SessionReplay(sessionData);
+    } catch (error) {
+        console.error('Failed to initialize session replay:', error);
+    }
+});
+</script>
 {% endblock %}

@@ -7,4 +7,5 @@ urlpatterns = [
     path('sessions/<uuid:session_id>/', views.session_detail, name='session_detail'),
     path('sessions/<uuid:session_id>/replay/', views.session_replay, name='session_replay'),
     path('test/', views.test_page, name='test_page'),
+    path('api/telemetry/', views.telemetry, name='telemetry'),
 ]

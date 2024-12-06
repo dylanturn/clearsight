@@ -18,8 +18,15 @@ class TelemetryConsumer(AsyncWebsocketConsumer):
             data = json.loads(text_data)
             
             if not self.session and data.get('type') == 'session_start':
+                # Log the received data
+                print(f"Received session start data - HTML size: {len(data.get('pageHtml', ''))} bytes, Styles size: {len(data.get('pageStyles', ''))} bytes")
+                
                 # Create new session
                 self.session = await self.create_session(data)
+                
+                # Log the created session
+                print(f"Created session {self.session.id} with HTML size: {len(self.session.page_html)} bytes")
+                
                 # Send confirmation
                 await self.send(json.dumps({
                     'type': 'session_started',
@@ -53,7 +60,9 @@ class TelemetryConsumer(AsyncWebsocketConsumer):
             screen_width=data.get('screenResolution', {}).get('width', 0),
             screen_height=data.get('screenResolution', {}).get('height', 0),
             window_width=data.get('windowSize', {}).get('width', 0),
-            window_height=data.get('windowSize', {}).get('height', 0)
+            window_height=data.get('windowSize', {}).get('height', 0),
+            page_html=data.get('pageHtml', ''),  # Save the captured HTML
+            page_styles=data.get('pageStyles', '')  # Save the captured styles
         )
         return session
 

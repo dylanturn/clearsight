@@ -7,59 +7,29 @@
 {% endblock %}
 
 {% block content %}
-<div class="bg-white dark:bg-gray-800 shadow rounded-lg p-6">
-    <h2 class="text-2xl font-bold mb-6 dark:text-white">Test Page</h2>
-    
-    <div class="space-y-4">
-        <p class="text-gray-600 dark:text-gray-300">
-            This is a test page to verify telemetry collection. Try the following actions:
-        </p>
+<div class="container mx-auto px-4 py-8">
+    <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
+        <h2 class="text-2xl font-bold mb-4 dark:text-white">Test Page</h2>
+        <p class="text-gray-600 dark:text-gray-300 mb-6">This page is for testing various interactions and events.</p>
         
-        <ul class="list-disc list-inside space-y-2 text-gray-600 dark:text-gray-300">
-            <li>Move your mouse around</li>
-            <li>Click different areas of the page</li>
-            <li>Type in the text area below</li>
-            <li>Scroll the page</li>
-            <li>Switch to another tab and back</li>
-            <li>Resize the window</li>
-        </ul>
-
-        <div class="mt-8">
-            <label for="test-input" class="block mb-2 text-sm font-medium text-gray-900 dark:text-white">Test Text Input</label>
-            <textarea id="test-input" rows="4" class="block p-2.5 w-full text-sm text-gray-900 bg-gray-50 rounded-lg border border-gray-300 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-blue-500 dark:focus:border-blue-500" placeholder="Type something here..."></textarea>
+        <div class="space-y-4">
+            <input type="text" class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-blue-500 dark:focus:border-blue-500" placeholder="Test input field">
+            
+            <textarea class="block p-2.5 w-full text-sm text-gray-900 bg-gray-50 rounded-lg border border-gray-300 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-blue-500 dark:focus:border-blue-500" placeholder="Test textarea"></textarea>
         </div>
-
-        <div class="mt-8 space-y-4">
+        
+        <div class="mt-6 space-x-4">
             <button type="button" class="text-white bg-blue-700 hover:bg-blue-800 focus:ring-4 focus:ring-blue-300 font-medium rounded-lg text-sm px-5 py-2.5 me-2 mb-2 dark:bg-blue-600 dark:hover:bg-blue-700 focus:outline-none dark:focus:ring-blue-800">Test Button 1</button>
             <button type="button" class="text-gray-900 bg-white border border-gray-300 focus:outline-none hover:bg-gray-100 focus:ring-4 focus:ring-gray-200 font-medium rounded-lg text-sm px-5 py-2.5 me-2 mb-2 dark:bg-gray-800 dark:text-white dark:border-gray-600 dark:hover:bg-gray-700 dark:hover:border-gray-600 dark:focus:ring-gray-700">Test Button 2</button>
         </div>
     </div>
-</div>
-
-<div id="websocket-status" class="mt-8 p-4 bg-gray-100 dark:bg-gray-700 rounded-lg">
-    <h3 class="text-lg font-semibold mb-2 dark:text-white">WebSocket Status</h3>
-    <pre id="status-log" class="text-sm text-gray-600 dark:text-gray-300"></pre>
 </div>
 {% endblock %}
 
 {% block extra_scripts %}
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    const statusLog = document.getElementById('status-log');
-    
-    // Override console.log to also display in our status div
-    const originalLog = console.log;
-    const originalError = console.error;
-    
-    console.log = function() {
-        statusLog.textContent += '\n[LOG] ' + Array.from(arguments).join(' ');
-        originalLog.apply(console, arguments);
-    };
-    
-    console.error = function() {
-        statusLog.textContent += '\n[ERROR] ' + Array.from(arguments).join(' ');
-        originalError.apply(console, arguments);
-    };
+    // No need for console logging overrides anymore
 });
 </script>
 {% endblock %}
