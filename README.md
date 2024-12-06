@@ -25,22 +25,31 @@ Clearsight is a web application that allows users to collect and replay user ses
     - Real-time event tracking
     - Silent failure handling for middleware unavailability
     - Collects:
-        - Page URL
-        - Page title
-        - User agent
-        - Screen resolution
-        - Browser window size
-        - Time spent on page
-        - Time spent on site
-        - Mouse movement
-        - Mouse clicks
-        - Keyboard input
-        - Scroll position
-        - Network requests
-        - Network responses
-        - Errors
-        - Console logs
-        - Custom events
+      - Initial page DOM
+      - Page styles
+      - Page scripts
+      - Page DOM
+      - Page DOM mutations
+      - Page events
+      - Page load
+      - Page unload
+      - Page navigation
+      - Page URL
+      - Page title
+      - User agent
+      - Screen resolution
+      - Browser window size
+      - Time spent on page
+      - Time spent on site
+      - Mouse movement
+      - Mouse clicks
+      - Keyboard input
+      - Scroll position
+      - Network requests
+      - Network responses
+      - Errors
+      - Console logs
+      - Custom events
 
 - Session Management and Analysis:
     - Comprehensive session list view with:

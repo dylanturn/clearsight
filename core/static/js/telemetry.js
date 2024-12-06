@@ -63,19 +63,15 @@ class Telemetry {
     async setupSession() {
         try {
             // Capture initial page state
-            const bodyContent = document.body.innerHTML;
-            this.lastHtml = `
-            <!DOCTYPE html>
-            <html>
-            <head>
-                <meta charset="UTF-8">
-                <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                <title>${document.title}</title>
-            </head>
-            <body>
-                ${bodyContent}
-            </body>
-            </html>`.replace(/\s+/g, ' ').replace(/>\s+</g, '><').trim();
+            const doctype = document.doctype ? new XMLSerializer().serializeToString(document.doctype) : '<!DOCTYPE html>';
+            const htmlElement = document.documentElement.cloneNode(true);
+            
+            // Remove the telemetry script to prevent it from being recorded
+            const telemetryScripts = htmlElement.querySelectorAll('script[src*="telemetry.js"]');
+            telemetryScripts.forEach(script => script.remove());
+            
+            // Get the full HTML including doctype
+            this.lastHtml = doctype + htmlElement.outerHTML;
             
             // Get computed styles for all elements
             const styleMap = new Map();
@@ -103,7 +99,15 @@ class Telemetry {
                     textAlign: computedStyle.textAlign,
                     overflow: computedStyle.overflow
                 };
-                styleMap.set(this.getElementPath(element), relevantStyles);
+                
+                // Only store styles if they have non-default values
+                const hasNonDefaultStyles = Object.values(relevantStyles).some(value => 
+                    value && value !== 'none' && value !== 'auto' && value !== '0px' && value !== 'normal'
+                );
+                
+                if (hasNonDefaultStyles) {
+                    styleMap.set(this.getElementPath(element), relevantStyles);
+                }
             }
 
             const sessionData = {
@@ -126,6 +130,13 @@ class Telemetry {
             // Send session start data through WebSocket
             this.sendData('session_start', sessionData);
             this.lastDomSnapshot = document.documentElement.innerHTML;
+            
+            // Log the data being sent
+            console.log('Sending session start data:', {
+                htmlLength: this.lastHtml.length,
+                stylesCount: styleMap.size
+            });
+            
         } catch (error) {
             console.error('Error setting up session:', error);
             // Retry setup after a delay
@@ -157,6 +168,48 @@ class Telemetry {
     }
 
     setupEventListeners() {
+        // DOM changes
+        const observer = new MutationObserver((mutations) => {
+            const now = Date.now();
+            const changes = mutations.map(mutation => ({
+                type: mutation.type,
+                target: this.getElementPath(mutation.target),
+                addedNodes: Array.from(mutation.addedNodes).map(node => ({
+                    nodeType: node.nodeType,
+                    nodeName: node.nodeName,
+                    path: node.nodeType === 1 ? this.getElementPath(node) : null
+                })),
+                removedNodes: Array.from(mutation.removedNodes).map(node => ({
+                    nodeType: node.nodeType,
+                    nodeName: node.nodeName,
+                    path: node.nodeType === 1 ? this.getElementPath(node) : null
+                })),
+                attributeName: mutation.attributeName,
+                oldValue: mutation.oldValue
+            }));
+
+            // Only send if there are meaningful changes
+            if (changes.length > 0) {
+                this.sendData('dom_mutation', {
+                    changes,
+                    timestamp: now
+                });
+                
+                // Update our DOM snapshot
+                this.lastDomSnapshot = document.documentElement.innerHTML;
+            }
+        });
+
+        // Start observing the entire document
+        observer.observe(document.documentElement, {
+            childList: true,
+            attributes: true,
+            characterData: true,
+            subtree: true,
+            attributeOldValue: true,
+            characterDataOldValue: true
+        });
+
         // Mouse movement with rate limiting
         document.addEventListener('mousemove', (e) => {
             const now = Date.now();
@@ -218,34 +271,6 @@ class Telemetry {
                     timestamp: Date.now()
                 });
             }, 100); // Rate limit scroll events to 100ms
-        });
-
-        // DOM mutations
-        const observer = new MutationObserver((mutations) => {
-            const currentSnapshot = document.documentElement.innerHTML;
-            if (currentSnapshot !== this.lastDomSnapshot) {
-                this.lastDomSnapshot = currentSnapshot;
-                this.sendData('dom_change', {
-                    mutations: mutations.map(mutation => ({
-                        type: mutation.type,
-                        target: this.getElementPath(mutation.target),
-                        addedNodes: Array.from(mutation.addedNodes).map(node => 
-                            node.nodeType === Node.ELEMENT_NODE ? this.getElementPath(node) : null
-                        ).filter(Boolean),
-                        removedNodes: Array.from(mutation.removedNodes).map(node => 
-                            node.nodeType === Node.ELEMENT_NODE ? this.getElementPath(node) : null
-                        ).filter(Boolean),
-                        timestamp: Date.now()
-                    }))
-                });
-            }
-        });
-
-        observer.observe(document.body, {
-            childList: true,
-            subtree: true,
-            attributes: true,
-            characterData: true
         });
 
         // Network requests

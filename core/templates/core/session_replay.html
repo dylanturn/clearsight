@@ -51,56 +51,6 @@
         animation: blink 1s infinite;
     }
     
-    .click-animation {
-        position: fixed;
-        width: 20px;
-        height: 20px;
-        border-radius: 50%;
-        background: rgba(66, 133, 244, 0.4);
-        transform-origin: center;
-        animation: click-ripple 0.5s cubic-bezier(0.4, 0, 0.2, 1);
-        pointer-events: none;
-        z-index: 9998;
-    }
-    
-    .replay-highlight {
-        position: absolute;
-        pointer-events: none;
-        z-index: 9997;
-        border-radius: 4px;
-        animation: highlight-fade 1s cubic-bezier(0.4, 0, 0.2, 1);
-    }
-    
-    .replay-highlight.highlight {
-        background: rgba(66, 133, 244, 0.2);
-        border: 2px solid rgba(66, 133, 244, 0.4);
-    }
-    
-    .replay-highlight.submit {
-        background: rgba(52, 168, 83, 0.2);
-        border: 2px solid rgba(52, 168, 83, 0.4);
-    }
-    
-    @keyframes click-ripple {
-        0% {
-            transform: scale(0);
-            opacity: 1;
-        }
-        100% {
-            transform: scale(2);
-            opacity: 0;
-        }
-    }
-    
-    @keyframes highlight-fade {
-        0% {
-            opacity: 1;
-        }
-        100% {
-            opacity: 0;
-        }
-    }
-    
     @keyframes blink {
         0%, 100% {
             opacity: 1;
@@ -110,280 +60,111 @@
         }
     }
     
-    @keyframes highlight-new {
-        0% {
-            background: rgba(52, 168, 83, 0.2);
-        }
-        100% {
-            background: transparent;
-        }
-    }
-    
-    @keyframes fade-out {
-        0% {
-            opacity: 1;
-        }
-        100% {
-            opacity: 0;
-        }
-    }
-    
     .replay-container {
-        display: flex;
-        flex-direction: column;
-        height: 100vh;
-        padding: 1rem;
-        gap: 1rem;
+        padding: 20px;
         background: #f8f9fa;
+        border-radius: 8px;
     }
     
     .replay-controls {
+        margin-bottom: 20px;
         display: flex;
         align-items: center;
-        gap: 1rem;
-        padding: 1rem;
-        background: white;
-        border-radius: 8px;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        gap: 20px;
+    }
+    
+    .btn {
+        padding: 8px 16px;
+        border-radius: 4px;
+        border: none;
+        cursor: pointer;
+        font-weight: 500;
+    }
+    
+    .btn-primary {
+        background: #0d6efd;
+        color: white;
+    }
+    
+    .btn-primary:hover {
+        background: #0b5ed7;
+    }
+    
+    .form-select {
+        padding: 8px;
+        border-radius: 4px;
+        border: 1px solid #ced4da;
     }
     
     .timeline {
-        flex: 1;
+        flex-grow: 1;
         display: flex;
         align-items: center;
-        gap: 0.5rem;
+        gap: 10px;
     }
     
     #progress {
-        flex: 1;
-        height: 4px;
-        -webkit-appearance: none;
-        appearance: none;
-        background: #e9ecef;
-        border-radius: 2px;
-        outline: none;
-        transition: height 0.2s;
-    }
-    
-    #progress:hover {
-        height: 6px;
-    }
-    
-    #progress::-webkit-slider-thumb {
-        -webkit-appearance: none;
-        appearance: none;
-        width: 12px;
-        height: 12px;
-        border-radius: 50%;
-        background: #4285f4;
-        cursor: pointer;
-        transition: transform 0.2s;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.2);
-    }
-    
-    #progress::-webkit-slider-thumb:hover {
-        transform: scale(1.2);
-    }
-    
-    #speed {
-        width: 80px;
-        padding: 0.25rem;
-        border-radius: 4px;
-        border: 1px solid #dee2e6;
-        background: white;
-        cursor: pointer;
+        flex-grow: 1;
     }
     
     #time-display {
         min-width: 60px;
         text-align: right;
-        font-family: monospace;
-        color: #495057;
     }
     
-    #play-pause {
-        min-width: 80px;
-        background: #4285f4;
-        color: white;
-        border: none;
-        padding: 0.5rem 1rem;
-        border-radius: 4px;
-        cursor: pointer;
-        transition: background-color 0.2s;
+    .alert {
+        padding: 1rem;
+        margin-bottom: 1rem;
+        border: 1px solid transparent;
+        border-radius: 0.25rem;
     }
     
-    #play-pause:hover {
-        background: #3367d6;
+    .alert-danger {
+        color: #842029;
+        background-color: #f8d7da;
+        border-color: #f5c2c7;
     }
     
-    .network-requests {
-        position: fixed;
-        top: 20px;
-        right: 20px;
-        max-width: 400px;
-        z-index: 9999;
-        display: flex;
-        flex-direction: column;
-        gap: 8px;
-        pointer-events: none;
+    .alert-heading {
+        margin-top: 0;
+        margin-bottom: 0.5rem;
     }
     
-    .network-request {
-        background: white;
-        border-radius: 4px;
-        padding: 8px 12px;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-        display: flex;
-        gap: 8px;
-        align-items: center;
-        font-size: 12px;
-        animation: slide-in 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-        opacity: 0.9;
+    .mb-0 {
+        margin-bottom: 0;
     }
     
-    .network-request.success {
-        border-left: 3px solid #34A853;
+    hr {
+        margin: 1rem 0;
+        border: 0;
+        border-top: 1px solid rgba(0,0,0,.1);
     }
     
-    .network-request.failed {
-        border-left: 3px solid #EA4335;
+    .fade-enter {
+        opacity: 0;
+        transform: translateX(-20px);
     }
     
-    .network-request.error {
-        border-left: 3px solid #FBBC05;
+    .fade-enter-active {
+        opacity: 1;
+        transform: translateX(0);
+        transition: opacity 300ms, transform 300ms;
     }
     
-    .network-request .method {
-        font-weight: bold;
-        color: #4285F4;
-        min-width: 50px;
+    .fade-exit {
+        opacity: 1;
+        transform: translateX(0);
     }
     
-    .network-request .url {
-        color: #5F6368;
-        flex: 1;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
+    .fade-exit-active {
+        opacity: 0;
+        transform: translateX(20px);
+        transition: opacity 300ms, transform 300ms;
     }
     
-    .network-request .status {
-        color: #3C4043;
-        min-width: 60px;
-        text-align: right;
-    }
-    
-    .network-request .duration {
-        color: #80868B;
-        min-width: 60px;
-        text-align: right;
-    }
-    
-    .error-indicator {
-        position: fixed;
-        bottom: 20px;
-        left: 50%;
-        transform: translateX(-50%);
-        background: #FEF7E6;
-        border: 1px solid #FBBC05;
-        border-radius: 4px;
-        padding: 12px;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-        z-index: 9999;
-        max-width: 600px;
-        animation: slide-up 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    }
-    
-    .error-content {
-        display: flex;
-        flex-direction: column;
-        gap: 4px;
-    }
-    
-    .error-title {
-        color: #EA4335;
-        font-weight: bold;
-    }
-    
-    .error-message {
-        color: #3C4043;
-    }
-    
-    .error-location {
-        color: #80868B;
-        font-family: monospace;
-        font-size: 12px;
-    }
-    
-    @keyframes slide-in {
-        from {
-            transform: translateX(100%);
-            opacity: 0;
-        }
-        to {
-            transform: translateX(0);
-            opacity: 0.9;
-        }
-    }
-    
-    @keyframes slide-up {
-        from {
-            transform: translate(-50%, 100%);
-            opacity: 0;
-        }
-        to {
-            transform: translate(-50%, 0);
-            opacity: 1;
-        }
-    }
-    
-    .fade-out {
-        animation: fade-out 0.5s cubic-bezier(0.4, 0, 0.2, 1);
-    }
-    
-    /* Animation for new elements */
-    @keyframes highlight-new-animation {
-        0% { background-color: rgba(0, 255, 0, 0.2); }
-        100% { background-color: transparent; }
-    }
-    
-    .highlight-new {
-        animation: highlight-new-animation 1s ease-out;
-    }
-    
-    /* Animation for removed elements */
-    @keyframes fade-out {
-        0% { opacity: 1; }
-        100% { opacity: 0; }
-    }
-    
-    /* Feedback messages */
-    .diff-message {
-        padding: 8px 12px;
-        margin: 4px 0;
-        border-radius: 4px;
-        font-size: 14px;
-        opacity: 0.9;
-    }
-    
-    .diff-message.success {
-        background-color: rgba(0, 255, 0, 0.2);
-        color: #006400;
-    }
-    
-    .diff-message.error {
-        background-color: rgba(255, 0, 0, 0.2);
-        color: #8b0000;
-    }
-    
-    .diff-message.warning {
-        background-color: rgba(255, 255, 0, 0.2);
-        color: #8b8b00;
-    }
-    
-    .diff-message.info {
-        background-color: rgba(0, 0, 255, 0.2);
-        color: #00008b;
+    .fade-enter-done {
+        transform: translateX(0);
+        opacity: 1;
     }
 </style>
 {% endblock %}
@@ -404,60 +185,34 @@
     </div>
     
     <div class="viewport">
-        <!-- <iframe id="replay-frame" sandbox="allow-same-origin allow-scripts allow-popups allow-forms allow-downloads allow-modals allow-presentation" allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture"></iframe> -->
-        <iframe id="replay-frame" sandbox="allow-same-origin allow-scripts allow-popups allow-forms allow-downloads allow-modals allow-presentation" allow="*"></iframe>
+        <iframe id="replay-frame" sandbox="allow-same-origin allow-scripts" allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture"></iframe>
         <div id="cursor"></div>
     </div>
 </div>
-
-<script id="session-data" type="application/json">
-    {{ session_data|safe }}
-</script>
 {% endblock %}
 
 {% block extra_scripts %}
-<script src="{% static 'js/session-replay.js' %}"></script>
+<script src="{% static 'js/session-replay.js' %}?v={% now 'U' %}"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     try {
-        // Get the session data element
-        const sessionDataElement = document.getElementById('session-data');
-        if (!sessionDataElement) {
-            throw new Error('Session data element not found');
-        }
-
-        // Get and parse the session data
-        const rawData = sessionDataElement.textContent.trim();
-        if (!rawData) {
-            throw new Error('Session data is empty');
-        }
-
-        let sessionData;
-        try {
-            sessionData = JSON.parse(rawData);
-            
-            // Validate the session data structure
-            if (!sessionData.id || !sessionData.page_html || !Array.isArray(sessionData.events)) {
-                throw new Error('Invalid session data structure');
-            }
-            
-            // Log successful parsing
-            console.log('Session data parsed successfully:', {
-                id: sessionData.id,
-                events: sessionData.events.length,
-                htmlSize: sessionData.page_html.length,
-                metadata: sessionData.metadata
-            });
-            
-            // Initialize the replay
-            window.replay = new SessionReplay(sessionData);
-        } catch (parseError) {
-            console.error('Failed to parse session data:', {
-                error: parseError,
-                dataPreview: rawData.substring(0, 100) + '...'
-            });
-            throw parseError;
-        }
+        // Debug session data
+        console.log('Raw session data:', {{ session_data|safe }});
+        
+        // Parse and validate session data
+        const sessionData = {{ session_data|safe }};
+        console.log('Parsed session data:', {
+            hasData: !!sessionData,
+            id: sessionData?.id,
+            hasHtml: !!sessionData?.page_html,
+            htmlLength: sessionData?.page_html?.length,
+            hasStyles: !!sessionData?.page_styles,
+            stylesLength: sessionData?.page_styles?.length,
+            eventsCount: sessionData?.events?.length
+        });
+        
+        // Initialize the replay with the session data
+        window.replay = new SessionReplay(sessionData);
     } catch (error) {
         console.error('Error initializing replay:', error);
         

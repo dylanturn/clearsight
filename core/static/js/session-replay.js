@@ -18,6 +18,7 @@ class SessionReplay {
         this.playbackSpeed = 1.0;
         this.startTime = null;
         this.lastTimestamp = null;
+        this.debug = true; // Added this line
         
         // Create cursor if it doesn't exist
         this.cursor = document.getElementById('cursor');
@@ -334,6 +335,7 @@ class SessionReplay {
                     try {
                         if (modification.element) {
                             const elements = doc.getElementsByTagName(modification.element);
+                            
                             for (const element of elements) {
                                 try {
                                     if (modification.attribute) {
@@ -389,6 +391,75 @@ class SessionReplay {
                 setTimeout(() => errorMessage.remove(), 3000);
             }
         }
+    }
+    
+    applyDomMutations(changes) {
+        if (!Array.isArray(changes)) {
+            console.warn('Invalid changes array:', changes);
+            return;
+        }
+
+        const frame = document.getElementById('replay-frame');
+        if (!frame || !frame.contentDocument) {
+            console.error('Replay frame not available');
+            return;
+        }
+
+        const doc = frame.contentDocument;
+
+        changes.forEach(mutation => {
+            try {
+                switch (mutation.type) {
+                    case 'childList':
+                        // Handle added nodes
+                        mutation.addedNodes.forEach(node => {
+                            if (node.nodeType === 1) { // Element node
+                                const targetParent = this.findElementByPath(doc, mutation.target);
+                                if (targetParent) {
+                                    const element = doc.createElement(node.nodeName);
+                                    targetParent.appendChild(element);
+                                    this.highlightElement(element);
+                                }
+                            }
+                        });
+
+                        // Handle removed nodes
+                        mutation.removedNodes.forEach(node => {
+                            if (node.nodeType === 1) { // Element node
+                                const element = this.findElementByPath(doc, node.path);
+                                if (element) {
+                                    element.remove();
+                                }
+                            }
+                        });
+                        break;
+
+                    case 'attributes':
+                        const element = this.findElementByPath(doc, mutation.target);
+                        if (element && mutation.attributeName) {
+                            if (mutation.oldValue === null) {
+                                element.removeAttribute(mutation.attributeName);
+                            } else {
+                                element.setAttribute(mutation.attributeName, mutation.oldValue);
+                            }
+                            this.highlightElement(element);
+                        }
+                        break;
+
+                    case 'characterData':
+                        const textNode = this.findElementByPath(doc, mutation.target);
+                        if (textNode) {
+                            textNode.textContent = mutation.oldValue || '';
+                            if (textNode.parentElement) {
+                                this.highlightElement(textNode.parentElement);
+                            }
+                        }
+                        break;
+                }
+            } catch (error) {
+                console.error('Error applying mutation:', error, mutation);
+            }
+        });
     }
     
     highlightElement(targetPath, action = 'highlight') {
@@ -500,29 +571,52 @@ class SessionReplay {
             return;
         }
         
+        // Get the frame's content dimensions
+        const frameDoc = frame.contentDocument;
+        if (!frameDoc || !frameDoc.documentElement) {
+            console.error('Frame document not accessible');
+            return;
+        }
+        
+        // Get the actual content dimensions
+        const contentWidth = frameDoc.documentElement.scrollWidth;
+        const contentHeight = frameDoc.documentElement.scrollHeight;
+        
         // Get the frame's dimensions and position
         const frameRect = frame.getBoundingClientRect();
         const viewportRect = viewport.getBoundingClientRect();
         
-        // Calculate the scale and offset
-        const scaleX = frameRect.width / window.innerWidth;
-        const scaleY = frameRect.height / window.innerHeight;
+        // Calculate the scale based on content dimensions
+        const scaleX = frameRect.width / contentWidth;
+        const scaleY = frameRect.height / contentHeight;
         
-        // Calculate cursor position relative to the frame
+        // Calculate cursor position relative to the frame, accounting for scroll
         const cursorX = (x * scaleX) + frameRect.left - viewportRect.left;
         const cursorY = (y * scaleY) + frameRect.top - viewportRect.top;
         
-        // Update cursor position
+        // Update cursor position with smooth transition
+        this.cursor.style.transition = 'transform 0.1s ease-out';
         this.cursor.style.transform = `translate(${cursorX}px, ${cursorY}px)`;
         this.cursor.style.display = 'block';
         
-        console.log('Cursor moved:', {
-            input: { x, y },
-            scaled: { x: cursorX, y: cursorY },
-            scale: { x: scaleX, y: scaleY },
-            frame: frameRect,
-            viewport: viewportRect
-        });
+        // Ensure cursor is visible by scrolling if needed
+        const buffer = 50; // pixels from edge
+        if (cursorX < buffer || cursorX > frameRect.width - buffer ||
+            cursorY < buffer || cursorY > frameRect.height - buffer) {
+            this.scrollViewport(x * scaleX, y * scaleY);
+        }
+        
+        // Log cursor movement for debugging
+        if (this.debug) {
+            console.log('Cursor moved:', {
+                input: { x, y },
+                scaled: { x: cursorX, y: cursorY },
+                scale: { x: scaleX, y: scaleY },
+                content: { width: contentWidth, height: contentHeight },
+                frame: frameRect,
+                viewport: viewportRect
+            });
+        }
     }
     
     showClick(x, y) {
@@ -582,103 +676,74 @@ class SessionReplay {
                 throw new Error('Replay frame not found');
             }
 
-            // Get the session data
-            const sessionDataElement = document.getElementById('session-data');
-            if (!sessionDataElement) {
-                throw new Error('Session data element not found');
-            }
+            // Debug session data
+            console.group('Session Data Debug');
+            console.log('Session data:', this.sessionData);
+            console.log('HTML Content Preview:', this.sessionData?.page_html?.substring(0, 500) + '...');
+            console.log('Styles Preview:', this.sessionData?.page_styles?.substring(0, 500) + '...');
+            console.groupEnd();
 
-            let sessionData;
-            try {
-                const rawData = sessionDataElement.textContent.trim();
-                if (!rawData) {
-                    throw new Error('Session data is empty');
-                }
-                sessionData = JSON.parse(rawData);
-            } catch (parseError) {
-                console.error('Failed to parse session data:', parseError);
-                throw new Error(`Failed to parse session data: ${parseError.message}`);
-            }
-
-            // Check if we have valid session data
-            if (!sessionData || !sessionData.page_html) {
-                throw new Error('Invalid session data structure');
-            }
-
-            // Create the document content
-            const doc = frame.contentDocument;
-            doc.open();
-            
-            try {
-                // Create a parser to properly parse the HTML
-                const parser = new DOMParser();
-                const parsedDoc = parser.parseFromString(sessionData.page_html, 'text/html');
-                
-                // Add CSP meta tag to the iframe content
-                const cspMeta = doc.createElement('meta');
-                cspMeta.httpEquiv = 'Content-Security-Policy';
-                cspMeta.content = "default-src 'self'; " +
-                    "script-src 'self' 'unsafe-inline' 'unsafe-eval' " +
-                    "https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://cdn.tailwindcss.com; " +
-                    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com " +
-                    "https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://cdn.tailwindcss.com; " +
-                    "img-src 'self' data: blob: https:; " +
-                    "font-src 'self' data: https://fonts.gstatic.com; " +
-                    "connect-src 'self' https:; " +
-                    "frame-src 'self'; " +
-                    "object-src 'none'; " +
-                    "base-uri 'self'";
-                parsedDoc.head.insertBefore(cspMeta, parsedDoc.head.firstChild);
-                
-                // Copy the parsed content to the iframe
-                doc.write('<!DOCTYPE html>');
-                doc.write(parsedDoc.documentElement.outerHTML);
-                doc.close();
-                
-                // Add base styles
-                const styleSheet = doc.createElement('style');
-                styleSheet.textContent = `
-                    html, body {
-                        margin: 0;
-                        padding: 0;
-                        width: 100%;
-                        height: 100%;
-                        font-family: system-ui, -apple-system, sans-serif;
+            // Wait for frame to be ready
+            frame.onload = () => {
+                try {
+                    // Validate session data
+                    if (!this.sessionData?.page_html) {
+                        console.error('Missing page HTML:', this.sessionData);
+                        throw new Error('Session data is missing page HTML content');
                     }
-                    body {
-                        max-width: 100%;
-                        box-sizing: border-box;
-                        padding: 20px;
-                        line-height: 1.5;
+
+                    // Get the document
+                    const doc = frame.contentDocument;
+                    if (!doc) {
+                        throw new Error('Cannot access frame document');
                     }
-                    * { cursor: none !important; }
-                    a, button, input, textarea, select { pointer-events: none !important; }
-                `;
-                doc.head.appendChild(styleSheet);
-                
-                // Add user styles if any
-                if (sessionData.page_styles) {
-                    const userStyles = doc.createElement('style');
-                    userStyles.textContent = sessionData.page_styles;
-                    doc.head.appendChild(userStyles);
+
+                    // Write the initial HTML content
+                    console.log('Writing HTML to frame...');
+                    doc.open();
+                    doc.write(this.sessionData.page_html);
+                    doc.close();  // Important: close the document after writing
+
+                    // Add styles if available
+                    if (this.sessionData.page_styles) {
+                        const styleSheet = doc.createElement('style');
+                        styleSheet.textContent = this.sessionData.page_styles;
+                        doc.head.appendChild(styleSheet);
+                    }
+
+                    console.log('Frame setup complete');
+                } catch (error) {
+                    console.error('Error in frame onload:', error);
+                    this.showError(error);
                 }
-                
-                // Add base target to prevent navigation
-                const base = doc.createElement('base');
-                base.target = '_blank';
-                doc.head.insertBefore(base, doc.head.firstChild);
-                
-                console.log('Replay frame setup complete');
-            } catch (contentError) {
-                doc.close();
-                throw new Error(`Failed to write content to frame: ${contentError.message}`);
-            }
+            };
         } catch (error) {
-            console.error('Error initializing replay:', error);
-            this.showError({
-                title: 'Initialization Error',
-                message: error.message
-            });
+            console.error('Error in setupReplayFrame:', error);
+            this.showError(error);
+        }
+    }
+    
+    processStyles(styles) {
+        try {
+            if (typeof styles === 'string') {
+                return styles;
+            }
+            
+            if (typeof styles === 'object') {
+                return Object.entries(styles)
+                    .map(([selector, rules]) => {
+                        const cssRules = Object.entries(rules)
+                            .map(([property, value]) => `${property}: ${value};`)
+                            .join(' ');
+                        return `${selector} { ${cssRules} }`;
+                    })
+                    .join('\n');
+            }
+            
+            return '';
+        } catch (error) {
+            console.error('Error processing styles:', error);
+            return '';
         }
     }
     
@@ -696,26 +761,6 @@ class SessionReplay {
         } catch (error) {
             console.error('Error sanitizing HTML:', error);
             return '<html><body><p>Error: Failed to sanitize HTML content</p></body></html>';
-        }
-    }
-    
-    processStyles(styles) {
-        if (typeof styles === 'string') {
-            return styles;
-        }
-        
-        // Convert object-based styles to CSS string
-        try {
-            const styleStr = Object.entries(styles).map(([selector, rules]) => {
-                const ruleStr = Object.entries(rules)
-                    .map(([prop, value]) => `${prop}: ${value};`)
-                    .join(' ');
-                return `${selector} { ${ruleStr} }`;
-            }).join('\n');
-            return styleStr;
-        } catch (error) {
-            console.error('Error processing styles:', error);
-            return '';
         }
     }
     

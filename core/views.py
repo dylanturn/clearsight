@@ -24,7 +24,8 @@ def dashboard(request):
         'active_sessions': Session.objects.filter(is_active=True).count(),
         'total_sessions': Session.objects.count(),
         'total_events': Event.objects.count(),
-        'recent_sessions': Session.objects.order_by('-start_time')[:10]
+        'recent_sessions': Session.objects.order_by('-start_time')[:10],
+        'disable_telemetry': True
     }
     return render(request, 'core/dashboard.html', context)
 
@@ -35,6 +36,7 @@ def session_detail(request, session_id):
     context = {
         'session': session,
         'events': events,
+        'disable_telemetry': True
     }
     return render(request, 'core/session_detail.html', context)
 
@@ -42,6 +44,7 @@ def sessions_list(request):
     sessions = Session.objects.order_by('-start_time')
     context = {
         'sessions': sessions,
+        'disable_telemetry': True
     }
     return render(request, 'core/sessions_list.html', context)
 
@@ -82,8 +85,11 @@ def session_replay(request, session_id):
             '<head>',
             '<meta charset="UTF-8">',
             '<meta name="viewport" content="width=device-width, initial-scale=1.0">',
-            '<meta http-equiv="Content-Security-Policy" content="default-src \'self\'; style-src \'self\' \'unsafe-inline\'; img-src \'self\' data:;">',
-            '<title>Session Replay</title>',
+            '<style id="base-styles">',
+            'body { margin: 0; padding: 0; }',
+            '* { cursor: none !important; }',
+            'a, button, input, textarea, select { pointer-events: none !important; }',
+            '</style>',
             '</head>',
             '<body>',
             body_content,
@@ -157,8 +163,7 @@ def session_replay(request, session_id):
             "font-src 'self' data: https://fonts.gstatic.com; "
             "connect-src 'self' https:; "
             "frame-src 'self'; "
-            "object-src 'none'; "
-            "base-uri 'self'"
+            "object-src 'none'"
         )
         response['Content-Security-Policy'] = csp
         
@@ -260,4 +265,4 @@ def telemetry(request):
         }, status=500)
 
 def test_page(request):
-    return render(request, 'core/test.html')
+    return render(request, 'core/test.html', {'disable_telemetry': False})
