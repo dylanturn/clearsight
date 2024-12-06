@@ -1,0 +1,54 @@
+{% extends 'core/base.html' %}
+
+{% block title %}Dashboard - Clearsight{% endblock %}
+
+{% block content %}
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+    <div class="p-6 bg-white rounded-lg shadow dark:bg-gray-800">
+        <h3 class="text-xl font-bold mb-2 dark:text-white">Active Sessions</h3>
+        <p class="text-4xl font-bold text-blue-600 dark:text-blue-500">{{ active_sessions }}</p>
+    </div>
+    
+    <div class="p-6 bg-white rounded-lg shadow dark:bg-gray-800">
+        <h3 class="text-xl font-bold mb-2 dark:text-white">Total Sessions</h3>
+        <p class="text-4xl font-bold text-green-600 dark:text-green-500">{{ total_sessions }}</p>
+    </div>
+    
+    <div class="p-6 bg-white rounded-lg shadow dark:bg-gray-800">
+        <h3 class="text-xl font-bold mb-2 dark:text-white">Total Events</h3>
+        <p class="text-4xl font-bold text-purple-600 dark:text-purple-500">{{ total_events }}</p>
+    </div>
+</div>
+
+<div class="mt-8 bg-white rounded-lg shadow dark:bg-gray-800">
+    <div class="p-6">
+        <h3 class="text-xl font-bold mb-4 dark:text-white">Recent Sessions</h3>
+        <div class="relative overflow-x-auto">
+            <table class="w-full text-sm text-left rtl:text-right text-gray-500 dark:text-gray-400">
+                <thead class="text-xs text-gray-700 uppercase bg-gray-50 dark:bg-gray-700 dark:text-gray-400">
+                    <tr>
+                        <th scope="col" class="px-6 py-3">Session ID</th>
+                        <th scope="col" class="px-6 py-3">Start Time</th>
+                        <th scope="col" class="px-6 py-3">Duration</th>
+                        <th scope="col" class="px-6 py-3">Events</th>
+                        <th scope="col" class="px-6 py-3">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for session in recent_sessions %}
+                    <tr class="bg-white border-b dark:bg-gray-800 dark:border-gray-700">
+                        <td class="px-6 py-4">{{ session.id }}</td>
+                        <td class="px-6 py-4">{{ session.start_time }}</td>
+                        <td class="px-6 py-4">{{ session.duration }}</td>
+                        <td class="px-6 py-4">{{ session.event_count }}</td>
+                        <td class="px-6 py-4">
+                            <a href="/sessions/{{ session.id }}" class="font-medium text-blue-600 dark:text-blue-500 hover:underline">View</a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}
