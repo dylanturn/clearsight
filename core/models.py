@@ -32,9 +32,14 @@ class Event(models.Model):
     type = models.CharField(max_length=50)
     timestamp = models.DateTimeField()
     data = models.JSONField()
+    html_diff = models.TextField(null=True, blank=True)  # Store HTML diffs for relevant events
 
     def __str__(self):
         return f"{self.type} at {self.timestamp}"
 
     class Meta:
         ordering = ['timestamp']
+        indexes = [
+            models.Index(fields=['session', 'timestamp']),
+            models.Index(fields=['type'])
+        ]

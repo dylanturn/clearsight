@@ -53,29 +53,103 @@ def session_replay(request, session_id):
         # Convert timestamps to milliseconds since epoch
         for event in events:
             event['timestamp'] = int(event['timestamp'].timestamp() * 1000)
-            event['session_id'] = str(event['session_id'])  # Convert UUID to string
+            event['session_id'] = str(event['session_id'])
         
-        # Prepare session data for the template
+        # Clean up the HTML content
+        page_html = session.page_html or '<html><body><p>No content captured</p></body></html>'
+        
+        # Extract body content and clean it
+        import re
+        from html import escape, unescape
+        
+        # First unescape any already escaped HTML (to prevent double escaping)
+        page_html = unescape(page_html)
+        
+        # Extract body content
+        body_match = re.search(r'<body[^>]*>(.*?)</body>', page_html, re.DOTALL | re.IGNORECASE)
+        body_content = body_match.group(1) if body_match else page_html
+        
+        # Clean up whitespace while preserving structure
+        body_content = re.sub(r'[ \t]+', ' ', body_content)  # Collapse spaces and tabs
+        body_content = re.sub(r'\n\s*\n+', '\n', body_content)  # Collapse multiple newlines
+        body_content = body_content.strip()
+        
+        # Create a clean HTML structure
+        clean_html = ''.join([
+            '<!DOCTYPE html>',
+            '<html>',
+            '<head>',
+            '<meta charset="UTF-8">',
+            '<meta name="viewport" content="width=device-width, initial-scale=1.0">',
+            '<meta http-equiv="Content-Security-Policy" content="default-src \'self\'; style-src \'self\' \'unsafe-inline\'; img-src \'self\' data:;">',
+            '<title>Session Replay</title>',
+            '</head>',
+            '<body>',
+            body_content,
+            '</body>',
+            '</html>'
+        ])
+        
+        # Prepare session data
         session_data = {
             'id': str(session.id),
-            'page_html': session.page_html or '<html><body><p>No content captured</p></body></html>',
+            'page_html': clean_html,
             'page_styles': session.page_styles or '',
-            'events': events
+            'events': events,
+            'metadata': {
+                'timestamp': int(session.start_time.timestamp() * 1000),
+                'duration': len(events),
+                'url': session.page_url,
+                'title': session.page_title,
+                'userAgent': session.user_agent,
+                'viewport': {
+                    'screen': {
+                        'width': session.screen_width,
+                        'height': session.screen_height
+                    },
+                    'window': {
+                        'width': session.window_width,
+                        'height': session.window_height
+                    }
+                }
+            }
         }
         
-        # Log debug information
-        logger.debug(f"Session replay data prepared: {len(events)} events, HTML size: {len(session_data['page_html'])} bytes")
+        # Convert to JSON with proper encoding
+        try:
+            # Use a custom JSON encoder for better error handling
+            class SessionEncoder(json.JSONEncoder):
+                def default(self, obj):
+                    if isinstance(obj, UUID):
+                        return str(obj)
+                    return super().default(obj)
+            
+            session_json = json.dumps(
+                session_data,
+                cls=SessionEncoder,
+                ensure_ascii=False,
+                separators=(',', ':')
+            )
+        except Exception as e:
+            logger.error(f"Error encoding session data: {e}")
+            return JsonResponse({
+                'error': 'Failed to encode session data',
+                'message': str(e)
+            }, status=500)
         
         context = {
             'session': session,
-            'session_data_json': json.dumps(session_data, cls=DjangoJSONEncoder),
+            'session_data': session_json
         }
         
         return render(request, 'core/session_replay.html', context)
         
     except Exception as e:
-        logger.error(f"Error preparing session replay: {e}")
-        raise  # Re-raise the exception to show the error page
+        logger.error(f"Error in session_replay view: {e}")
+        return JsonResponse({
+            'error': 'Failed to prepare session replay',
+            'message': str(e)
+        }, status=500)
 
 @csrf_protect
 @require_http_methods(['POST'])
@@ -106,7 +180,7 @@ def telemetry(request):
             return JsonResponse({'status': 'success', 'session_id': str(session.id)})
             
         # Handle all event types (click, mousemove, keypress, etc.)
-        elif event_type in ['click', 'mousemove', 'keypress', 'scroll', 'resize', 'input']:
+        elif event_type in ['click', 'mousemove', 'keypress', 'scroll', 'resize', 'input', 'fetch', 'xhr', 'form_submit', 'dom_mutation', 'visibility_change', 'window_resize', 'error']:
             session_id = data.get('session_id')
             if not session_id:
                 logger.error('No session ID provided in event data')
@@ -126,13 +200,21 @@ def telemetry(request):
                     'received_data': data
                 }, status=404)
                 
-            event = Event.objects.create(
-                session=session,
-                type=event_type,
-                timestamp=timezone.now(),
-                data=data.get('data', {})
-            )
+            # Create event with optional HTML diff
+            event_data = {
+                'session': session,
+                'type': event_type,
+                'timestamp': timezone.now(),
+                'data': data.get('data', {}),
+                'html_diff': data.get('data', {}).get('htmlDiff')
+            }
+            
+            event = Event.objects.create(**event_data)
             logger.info(f'Created new event: {event.type} for session {session_id}')
+            
+            if event.html_diff:
+                logger.info(f'Stored HTML diff for event {event.id}, size: {len(event.html_diff)} bytes')
+                
             return JsonResponse({'status': 'success'})
             
         else:

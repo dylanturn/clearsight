@@ -7,59 +7,78 @@
 <style>
     .viewport {
         position: relative;
-        flex: 1;
-        min-height: 500px;
+        width: 100%;
+        height: calc(100vh - 200px);
         background: #fff;
         border: 1px solid #ddd;
         border-radius: 4px;
         overflow: hidden;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
     }
     
     #replay-frame {
         width: 100%;
         height: 100%;
         border: none;
-        position: absolute;
-        top: 0;
-        left: 0;
+        background: white;
     }
     
     #cursor {
-        position: absolute;
+        position: fixed;
         width: 20px;
         height: 20px;
-        background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 20 20"><path d="M0 0l6 18 2.5-6L15 14 0 0z" fill="#000"/></svg>');
+        background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 20 20"><path d="M0 0l6 18 2.5-6L15 14 0 0z" fill="%23000"/></svg>');
         pointer-events: none;
-        transform-origin: top left;
         z-index: 9999;
-        transition: transform 0.1s ease;
-        display: none;  /* Initially hidden */
+        transition: transform 0.1s cubic-bezier(0.4, 0, 0.2, 1);
+        display: none;
     }
     
     #cursor.clicking {
         transform: scale(0.9);
-        filter: brightness(0.8);
+        transition: transform 0.1s cubic-bezier(0.4, 0, 0.2, 1);
     }
     
-    #cursor.typing {
-        animation: blink 0.1s ease;
-    }
-    
-    @keyframes blink {
-        0%, 100% { opacity: 1; }
-        50% { opacity: 0.5; }
+    #cursor.typing::after {
+        content: '';
+        position: absolute;
+        width: 2px;
+        height: 12px;
+        background: #000;
+        left: 50%;
+        top: 50%;
+        transform: translate(-50%, -50%);
+        animation: blink 1s infinite;
     }
     
     .click-animation {
-        position: absolute;
+        position: fixed;
         width: 20px;
         height: 20px;
         border-radius: 50%;
-        background: rgba(255, 0, 0, 0.5);
+        background: rgba(66, 133, 244, 0.4);
         transform-origin: center;
-        animation: click-ripple 0.5s ease-out;
+        animation: click-ripple 0.5s cubic-bezier(0.4, 0, 0.2, 1);
         pointer-events: none;
         z-index: 9998;
+    }
+    
+    .replay-highlight {
+        position: absolute;
+        pointer-events: none;
+        z-index: 9997;
+        border-radius: 4px;
+        animation: highlight-fade 1s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    
+    .replay-highlight.highlight {
+        background: rgba(66, 133, 244, 0.2);
+        border: 2px solid rgba(66, 133, 244, 0.4);
+    }
+    
+    .replay-highlight.submit {
+        background: rgba(52, 168, 83, 0.2);
+        border: 2px solid rgba(52, 168, 83, 0.4);
     }
     
     @keyframes click-ripple {
@@ -73,14 +92,59 @@
         }
     }
     
+    @keyframes highlight-fade {
+        0% {
+            opacity: 1;
+        }
+        100% {
+            opacity: 0;
+        }
+    }
+    
+    @keyframes blink {
+        0%, 100% {
+            opacity: 1;
+        }
+        50% {
+            opacity: 0;
+        }
+    }
+    
+    @keyframes highlight-new {
+        0% {
+            background: rgba(52, 168, 83, 0.2);
+        }
+        100% {
+            background: transparent;
+        }
+    }
+    
+    @keyframes fade-out {
+        0% {
+            opacity: 1;
+        }
+        100% {
+            opacity: 0;
+        }
+    }
+    
+    .replay-container {
+        display: flex;
+        flex-direction: column;
+        height: 100vh;
+        padding: 1rem;
+        gap: 1rem;
+        background: #f8f9fa;
+    }
+    
     .replay-controls {
         display: flex;
         align-items: center;
         gap: 1rem;
-        margin-bottom: 1rem;
         padding: 1rem;
-        background: #f8f9fa;
-        border-radius: 0.5rem;
+        background: white;
+        border-radius: 8px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
     }
     
     .timeline {
@@ -95,9 +159,14 @@
         height: 4px;
         -webkit-appearance: none;
         appearance: none;
-        background: #dee2e6;
+        background: #e9ecef;
         border-radius: 2px;
         outline: none;
+        transition: height 0.2s;
+    }
+    
+    #progress:hover {
+        height: 6px;
     }
     
     #progress::-webkit-slider-thumb {
@@ -105,60 +174,259 @@
         appearance: none;
         width: 12px;
         height: 12px;
-        background: #0d6efd;
         border-radius: 50%;
+        background: #4285f4;
         cursor: pointer;
+        transition: transform 0.2s;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+    }
+    
+    #progress::-webkit-slider-thumb:hover {
+        transform: scale(1.2);
+    }
+    
+    #speed {
+        width: 80px;
+        padding: 0.25rem;
+        border-radius: 4px;
+        border: 1px solid #dee2e6;
+        background: white;
+        cursor: pointer;
+    }
+    
+    #time-display {
+        min-width: 60px;
+        text-align: right;
+        font-family: monospace;
+        color: #495057;
+    }
+    
+    #play-pause {
+        min-width: 80px;
+        background: #4285f4;
+        color: white;
+        border: none;
+        padding: 0.5rem 1rem;
+        border-radius: 4px;
+        cursor: pointer;
+        transition: background-color 0.2s;
+    }
+    
+    #play-pause:hover {
+        background: #3367d6;
+    }
+    
+    .network-requests {
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        max-width: 400px;
+        z-index: 9999;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        pointer-events: none;
+    }
+    
+    .network-request {
+        background: white;
+        border-radius: 4px;
+        padding: 8px 12px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        font-size: 12px;
+        animation: slide-in 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        opacity: 0.9;
+    }
+    
+    .network-request.success {
+        border-left: 3px solid #34A853;
+    }
+    
+    .network-request.failed {
+        border-left: 3px solid #EA4335;
+    }
+    
+    .network-request.error {
+        border-left: 3px solid #FBBC05;
+    }
+    
+    .network-request .method {
+        font-weight: bold;
+        color: #4285F4;
+        min-width: 50px;
+    }
+    
+    .network-request .url {
+        color: #5F6368;
+        flex: 1;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    
+    .network-request .status {
+        color: #3C4043;
+        min-width: 60px;
+        text-align: right;
+    }
+    
+    .network-request .duration {
+        color: #80868B;
+        min-width: 60px;
+        text-align: right;
+    }
+    
+    .error-indicator {
+        position: fixed;
+        bottom: 20px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: #FEF7E6;
+        border: 1px solid #FBBC05;
+        border-radius: 4px;
+        padding: 12px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        z-index: 9999;
+        max-width: 600px;
+        animation: slide-up 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    
+    .error-content {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+    }
+    
+    .error-title {
+        color: #EA4335;
+        font-weight: bold;
+    }
+    
+    .error-message {
+        color: #3C4043;
+    }
+    
+    .error-location {
+        color: #80868B;
+        font-family: monospace;
+        font-size: 12px;
+    }
+    
+    @keyframes slide-in {
+        from {
+            transform: translateX(100%);
+            opacity: 0;
+        }
+        to {
+            transform: translateX(0);
+            opacity: 0.9;
+        }
+    }
+    
+    @keyframes slide-up {
+        from {
+            transform: translate(-50%, 100%);
+            opacity: 0;
+        }
+        to {
+            transform: translate(-50%, 0);
+            opacity: 1;
+        }
+    }
+    
+    .fade-out {
+        animation: fade-out 0.5s cubic-bezier(0.4, 0, 0.2, 1);
     }
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="container mx-auto px-4 py-8">
-    <h1 class="text-2xl font-bold mb-4">Session Replay</h1>
+<div class="replay-container">
+    <div class="replay-controls">
+        <button id="play-pause" class="btn btn-primary">Play</button>
+        <select id="speed" class="form-select">
+            <option value="0.5">0.5x</option>
+            <option value="1.0" selected>1.0x</option>
+            <option value="2.0">2.0x</option>
+        </select>
+        <div class="timeline">
+            <input type="range" id="progress" min="0" max="100" value="0">
+            <span id="time-display">0:00</span>
+        </div>
+    </div>
     
-    <div class="replay-container bg-white rounded-lg shadow p-4">
-        <div class="replay-controls flex items-center space-x-4 mb-4">
-            <button id="play-pause" class="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600">Play</button>
-            <select id="speed" class="form-select px-4 py-2 border rounded">
-                <option value="0.5">0.5x</option>
-                <option value="1.0" selected>1.0x</option>
-                <option value="2.0">2.0x</option>
-            </select>
-            <div class="timeline flex-1 flex items-center space-x-2">
-                <input type="range" id="progress" class="flex-1" min="0" max="100" value="0">
-                <span id="time-display" class="text-sm">0:00 / 0:00</span>
-            </div>
-        </div>
-        
-        <div class="viewport relative border rounded-lg overflow-hidden" style="width: 800px; height: 600px; margin: 0 auto;">
-            <iframe id="replay-frame" class="w-full h-full" sandbox="allow-same-origin allow-scripts"></iframe>
-            <div id="cursor" class="absolute w-4 h-4 bg-red-500 rounded-full pointer-events-none transform -translate-x-1/2 -translate-y-1/2" style="z-index: 1000;"></div>
-        </div>
-        
-        <div class="debug-info mt-4 text-sm text-gray-600">
-            <p>Session ID: <span id="session-id">{{ session.id }}</span></p>
-            <p>Content Size: <span id="content-size">HTML: {{ session.page_html|length }} bytes, Styles: {{ session.page_styles|length }} bytes</span></p>
-            <p>Events: <span id="event-count">{{ session.events.count }}</span></p>
-        </div>
+    <div class="viewport">
+        <iframe id="replay-frame" sandbox="allow-same-origin allow-scripts allow-popups allow-popups-to-escape-sandbox"></iframe>
+        <div id="cursor"></div>
     </div>
 </div>
 
-<!-- Session Data -->
-<script type="application/json" id="session-data">
-{{ session_data_json|safe }}
+<script id="session-data" type="application/json">
+    {{ session_data|safe }}
 </script>
+{% endblock %}
 
-<!-- Scripts -->
+{% block extra_scripts %}
 <script src="{% static 'js/session-replay.js' %}"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     try {
-        const rawData = document.getElementById('session-data').textContent;
-        const sessionData = JSON.parse(rawData.trim());
-        console.log('Initializing replay with session data:', sessionData);
-        window.replay = new SessionReplay(sessionData);
+        // Get the session data element
+        const sessionDataElement = document.getElementById('session-data');
+        if (!sessionDataElement) {
+            throw new Error('Session data element not found');
+        }
+
+        // Get and parse the session data
+        const rawData = sessionDataElement.textContent.trim();
+        if (!rawData) {
+            throw new Error('Session data is empty');
+        }
+
+        let sessionData;
+        try {
+            sessionData = JSON.parse(rawData);
+            
+            // Validate the session data structure
+            if (!sessionData.id || !sessionData.page_html || !Array.isArray(sessionData.events)) {
+                throw new Error('Invalid session data structure');
+            }
+            
+            // Log successful parsing
+            console.log('Session data parsed successfully:', {
+                id: sessionData.id,
+                events: sessionData.events.length,
+                htmlSize: sessionData.page_html.length,
+                metadata: sessionData.metadata
+            });
+            
+            // Initialize the replay
+            window.replay = new SessionReplay(sessionData);
+        } catch (parseError) {
+            console.error('Failed to parse session data:', {
+                error: parseError,
+                dataPreview: rawData.substring(0, 100) + '...'
+            });
+            throw parseError;
+        }
     } catch (error) {
-        console.error('Failed to initialize session replay:', error);
+        console.error('Error initializing replay:', error);
+        
+        // Show error to user
+        const viewport = document.querySelector('.viewport');
+        if (viewport) {
+            viewport.innerHTML = `
+                <div class="alert alert-danger" role="alert">
+                    <h4 class="alert-heading">Error Initializing Replay</h4>
+                    <p>${error.message}</p>
+                    <hr>
+                    <p class="mb-0">Please try refreshing the page. If the error persists, contact support.</p>
+                </div>
+            `;
+        }
     }
 });
 </script>
