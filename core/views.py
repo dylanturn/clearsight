@@ -23,5 +23,12 @@ def session_detail(request, session_id):
     }
     return render(request, 'core/session_detail.html', context)
 
+def sessions_list(request):
+    sessions = Session.objects.order_by('-start_time')
+    context = {
+        'sessions': sessions,
+    }
+    return render(request, 'core/sessions_list.html', context)
+
 def test_page(request):
     return render(request, 'core/test.html')

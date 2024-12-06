@@ -12,17 +12,19 @@ Clearsight is a web application that allows users to collect and replay user ses
 - **Backend**
   - Django
   - Django REST Framework
+  - Django Channels (WebSocket support)
+  - Daphne (ASGI server)
   - SQLite database
   - OpenSearch database
 
 ## Features
 
-- A simple JS script designed to collect user session telemetry:
-    - Will be added to a page using a `<script>` tag.
-    - Will store the data in a JSON object.
-    - Will send the data to a middleware service.
-    - If the middleware service isn't available, the the websocket should fail silently.
-    - Will collect the following data:
+- Real-time telemetry collection via WebSocket:
+    - Reliable WebSocket connection with automatic reconnection
+    - Session-based data collection
+    - Real-time event tracking
+    - Silent failure handling for middleware unavailability
+    - Collects:
         - Page URL
         - Page title
         - User agent
@@ -39,11 +41,25 @@ Clearsight is a web application that allows users to collect and replay user ses
         - Errors
         - Console logs
         - Custom events
-- A simple middleware service designed to receive user session telemetry.
-    - Will receive the data from the JS script.
-    - Will store the data in an OpenSearch cluster.
-    - Will provide an API for querying the data.
-- A simple dashboard designed to replay user session telemetry.
-    - Will query the middleware service for the data.
-    - Will display the data in a user-friendly format.
-    - Will allow the dashboard users to replay the session.
+
+- Session Management and Analysis:
+    - Comprehensive session list view with:
+        - Session status tracking (Active/Inactive)
+        - Event count per session
+        - Session timeline view
+        - Quick access to session details
+    - Detailed session replay capabilities
+    - Real-time session monitoring
+
+- Data Storage and API:
+    - WebSocket-based data ingestion
+    - OpenSearch-powered data storage
+    - RESTful API for data queries
+    - Session-based data organization
+
+- Modern Dashboard Interface:
+    - Clean, responsive design with Tailwind CSS
+    - Real-time session monitoring
+    - Interactive session replay
+    - Session statistics and analytics
+    - Dark mode support
